@@ -1,4 +1,4 @@
-import { main } from './src/gleam_vite.gleam'
+import { main } from './src/kemotvt.gleam'
 
 document.addEventListener("DOMContentLoaded", () => {
     const dispatch = main({});

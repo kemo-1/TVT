@@ -10,13 +10,13 @@ export default {
         }, injectRegister: 'script-defer', registerType: 'autoUpdate'
     })
     ],
-    build: {
-        rollupOptions: {
-            input: 'index.html',
-            output: {
-                dir: './dist',
-                entryFileNames: 'assets/gleam_vite.js',
-            }
-        }
-    }
+    // build: {
+    //     rollupOptions: {
+    //         input: 'index.html',
+    //         output: {
+    //             dir: './dist',
+    //             entryFileNames: 'assets/gleam_vite.js',
+    //         }
+    //     }
+    // }
 }
