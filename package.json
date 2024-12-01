@@ -4,6 +4,9 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@tiptap/core": "^2.10.3",
+    "@tiptap/pm": "^2.10.3",
+    "@tiptap/starter-kit": "^2.10.3",
     "vite": "^6.0.0",
     "vite-gleam": "^0.4.3"
   },

@@ -1,15 +1,16 @@
+import gleam/javascript
+import gleam/javascript/array.{type Array}
 import gleam/list
+import gleam/option.{type Option, None, Some}
 import lustre
 import lustre/attribute
 import lustre/effect.{type Effect}
 import lustre/event
-import sketch/lustre/element
-
-import sketch/size
-
 import sketch
 import sketch/lustre as sketch_lustre
+import sketch/lustre/element
 import sketch/lustre/element/html
+import sketch/size
 
 // MAIN ------------------------------------------------------------------------
 
@@ -24,16 +25,46 @@ pub fn main() {
 // MODEL -----------------------------------------------------------------------
 type Model {
   Model(
-    to_do: List(String),
-    in_progress: List(String),
-    done: List(String),
-    new_task: String,
+    to_do: Option(List(String)),
+    in_progress: Option(List(String)),
+    done: Option(List(String)),
+    new_task_input: String,
     // Holds the value of the new task being typed
   )
 }
 
+fn read_localstorage(key: String) -> Effect(Msg) {
+  effect.from(fn(dispatch) {
+    do_read_localstorage(key)
+    |> CacheUpdatedMessage
+    |> dispatch
+  })
+}
+
+@external(javascript, "./storage.ffi.ts", "read_local_storage")
+fn do_read_localstorage(_key: String) -> Result(Array(String), Nil) {
+  Error(Nil)
+}
+
+fn write_localstorage(key: String, value: Array(String)) -> Effect(msg) {
+  effect.from(fn(_) { do_write_localstorage(key, value) })
+}
+
+@external(javascript, "./storage.ffi.ts", "write_local_storage")
+fn do_write_localstorage(_key: String, _value: Array(String)) -> Nil {
+  Nil
+}
+
 fn init(_flags) -> #(Model, Effect(Msg)) {
-  #(Model(to_do: [], in_progress: [], done: [], new_task: ""), effect.none())
+  #(
+    Model(
+      to_do: Some([]),
+      in_progress: Some([]),
+      done: Some([]),
+      new_task_input: "",
+    ),
+    read_localstorage("todo"),
+  )
 }
 
 // UPDATE ----------------------------------------------------------------------
@@ -42,30 +73,51 @@ pub opaque type Msg {
   UpdateNewTask(String)
   AddTask(String)
   DeleteTask(String, String)
+  CacheUpdatedMessage(Result(Array(String), Nil))
 }
 
 fn update(model: Model, msg: Msg) {
   case msg {
-    UpdateNewTask(value) -> #(Model(..model, new_task: value), effect.none())
+    CacheUpdatedMessage(Ok(to_do)) -> #(
+      Model(..model, to_do: Some(array.to_list(to_do))),
+      effect.none(),
+    )
+    CacheUpdatedMessage(Error(_)) -> #(model, effect.none())
+    UpdateNewTask(value) -> #(
+      Model(..model, new_task_input: value),
+      effect.none(),
+    )
     DeleteTask(kanban_block, task) -> {
       case kanban_block {
         "todo" -> {
           let tasks =
             model.to_do
+            |> option.lazy_unwrap(fn() { [] })
             |> list.filter(fn(t) { t != task })
-          #(Model(..model, to_do: tasks), effect.none())
+          #(
+            Model(..model, to_do: Some(tasks)),
+            write_localstorage("todo", tasks |> array.from_list),
+          )
         }
         "in_progress" -> {
           let tasks =
             model.in_progress
+            |> option.lazy_unwrap(fn() { [] })
             |> list.filter(fn(t) { t != task })
-          #(Model(..model, in_progress: tasks), effect.none())
+          #(
+            Model(..model, in_progress: Some(tasks)),
+            write_localstorage("in_progress", tasks |> array.from_list),
+          )
         }
         "done" -> {
           let tasks =
             model.done
+            |> option.lazy_unwrap(fn() { [] })
             |> list.filter(fn(t) { t != task })
-          #(Model(..model, done: tasks), effect.none())
+          #(
+            Model(..model, done: Some(tasks)),
+            write_localstorage("done", tasks |> array.from_list),
+          )
         }
 
         _ -> #(model, effect.none())
@@ -75,33 +127,82 @@ fn update(model: Model, msg: Msg) {
     AddTask(kanban_block) ->
       case kanban_block {
         "todo" -> {
-          case model.new_task {
-            "" -> #(model, effect.none())
-            t -> #(
-              Model(..model, to_do: [t, ..model.to_do], new_task: ""),
-              effect.none(),
-            )
-          }
-        }
-        "in_progress" -> {
-          case model.new_task {
+          case model.new_task_input {
             "" -> #(model, effect.none())
             t -> #(
               Model(
                 ..model,
-                in_progress: [t, ..model.in_progress],
-                new_task: "",
+                to_do: Some([
+                  t,
+                  ..model.to_do
+                  |> option.lazy_unwrap(fn() { [] })
+                ]),
+                //  [t, ..model.to_do]
+
+                new_task_input: "",
               ),
-              effect.none(),
+              write_localstorage(
+                "todo",
+                Some([
+                  t,
+                  ..model.to_do
+                  |> option.lazy_unwrap(fn() { [] })
+                ])
+                  |> option.lazy_unwrap(fn() { [] })
+                  |> array.from_list,
+              ),
+            )
+          }
+        }
+        "in_progress" -> {
+          case model.new_task_input {
+            "" -> #(model, effect.none())
+            t -> #(
+              Model(
+                ..model,
+                in_progress: Some([
+                  t,
+                  ..model.in_progress
+                  |> option.lazy_unwrap(fn() { [] })
+                ]),
+                new_task_input: "",
+              ),
+              write_localstorage(
+                "in_progress",
+                Some([
+                  t,
+                  ..model.in_progress
+                  |> option.lazy_unwrap(fn() { [] })
+                ])
+                  |> option.lazy_unwrap(fn() { [] })
+                  |> array.from_list,
+              ),
             )
           }
         }
         "done" -> {
-          case model.new_task {
+          case model.new_task_input {
             "" -> #(model, effect.none())
             t -> #(
-              Model(..model, done: [t, ..model.done], new_task: ""),
-              effect.none(),
+              Model(
+                ..model,
+                done: Some([
+                  t,
+                  ..model.done
+                  |> option.lazy_unwrap(fn() { [] })
+                ]),
+                new_task_input: "",
+              ),
+              write_localstorage(
+                "done",
+                Some([
+                  t,
+                  ..model.done
+                  |> option.lazy_unwrap(fn() { [] })
+                ])
+                  |> option.lazy_unwrap(fn() { [] })
+                  |> array.from_list,
+              ),
             )
           }
         }
@@ -298,13 +399,13 @@ fn delete_task_button() {
 fn view(model: Model) {
   html.div(container(), [], [
     html.div(kanban_board_container(), [], [
-      element.element("my-component", sketch.class([]), [], []),
+      element.element("tiptap-editor", sketch.class([]), [], []),
       html.div(kanban_board(), [], [
         html.div(kanban_block(), [], [
           html.div(block_title(), [], [html.text("To Do")]),
           html.input(add_task_input(), [
             attribute.type_("text"),
-            attribute.value(model.new_task),
+            attribute.value(model.new_task_input),
             event.on_input(UpdateNewTask),
           ]),
           html.button(add_task_button(), [event.on_click(AddTask("todo"))], [
@@ -312,6 +413,7 @@ fn view(model: Model) {
           ]),
           element.fragment(
             model.to_do
+            |> option.lazy_unwrap(fn() { [] })
             |> list.map(fn(task_item) {
               html.div(task(), [], [
                 html.text(task_item),
@@ -328,7 +430,7 @@ fn view(model: Model) {
           html.div(block_title(), [], [html.text("In Progress")]),
           html.input(add_task_input(), [
             attribute.type_("text"),
-            attribute.value(model.new_task),
+            attribute.value(model.new_task_input),
             event.on_input(UpdateNewTask),
           ]),
           html.button(
@@ -338,6 +440,7 @@ fn view(model: Model) {
           ),
           element.fragment(
             model.in_progress
+            |> option.lazy_unwrap(fn() { [] })
             |> list.map(fn(task_item) {
               html.div(task(), [], [
                 html.text(task_item),
@@ -354,7 +457,7 @@ fn view(model: Model) {
           html.div(block_title(), [], [html.text("Done")]),
           html.input(add_task_input(), [
             attribute.type_("text"),
-            attribute.value(model.new_task),
+            attribute.value(model.new_task_input),
             event.on_input(UpdateNewTask),
           ]),
           html.button(add_task_button(), [event.on_click(AddTask("done"))], [
@@ -362,6 +465,7 @@ fn view(model: Model) {
           ]),
           element.fragment(
             model.done
+            |> option.lazy_unwrap(fn() { [] })
             |> list.map(fn(task_item) {
               html.div(task(), [], [
                 html.text(task_item),
