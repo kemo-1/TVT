@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   build:
@@ -20,15 +20,17 @@ jobs:
 
       - name: Install dependencies
         uses: bahmutov/npm-install@v1
+        
       - name: install gleam
         run: npm i @chouqueth/gleam 
+        
       - name: Build project
         run: npm run build
 
       - name: Upload production-ready build files
         uses: actions/upload-artifact@v3
         with:
-          name: production-files
+          name: dist_folder
           path: ./dist
 
   deploy:
@@ -41,7 +43,7 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: production-files
+          name: dest_folder
           path: ./dist
 
       - name: Deploy to GitHub Pages
