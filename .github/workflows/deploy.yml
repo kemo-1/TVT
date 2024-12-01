@@ -30,8 +30,8 @@ jobs:
       - name: Upload production-ready build files
         uses: actions/upload-artifact@v4
         with:
-          name: dist_folder
-          path: ./dist
+          name: myfolder
+          path: dist
 
   deploy:
     name: Deploy
@@ -43,11 +43,11 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: dest_folder
-          path: ./dist
+          name: myfolder
+          path: dist
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
+          publish_dir: dist
