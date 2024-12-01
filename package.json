@@ -4,6 +4,7 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@chouqueth/gleam": "^1.6.2",
     "@tiptap/core": "^2.10.3",
     "@tiptap/pm": "^2.10.3",
     "@tiptap/starter-kit": "^2.10.3",
