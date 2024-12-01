@@ -298,6 +298,7 @@ fn delete_task_button() {
 fn view(model: Model) {
   html.div(container(), [], [
     html.div(kanban_board_container(), [], [
+      element.element("my-component", sketch.class([]), [], []),
       html.div(kanban_board(), [], [
         html.div(kanban_block(), [], [
           html.div(block_title(), [], [html.text("To Do")]),
