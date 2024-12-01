@@ -2,6 +2,7 @@ import gleam/javascript
 import gleam/javascript/array.{type Array}
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import lustre
 import lustre/attribute
 import lustre/effect.{type Effect}
@@ -42,16 +43,16 @@ fn read_localstorage(key: String) -> Effect(Msg) {
 }
 
 @external(javascript, "./storage.ffi.ts", "read_local_storage")
-fn do_read_localstorage(_key: String) -> Result(Array(String), Nil) {
+fn do_read_localstorage(_key: String) -> Result(Array(Array(String)), Nil) {
   Error(Nil)
 }
 
-fn write_localstorage(key: String, value: Array(String)) -> Effect(msg) {
+fn write_localstorage(key: String, value: Array(Array(String))) -> Effect(msg) {
   effect.from(fn(_) { do_write_localstorage(key, value) })
 }
 
 @external(javascript, "./storage.ffi.ts", "write_local_storage")
-fn do_write_localstorage(_key: String, _value: Array(String)) -> Nil {
+fn do_write_localstorage(_key: String, _value: Array(Array(String))) -> Nil {
   Nil
 }
 
@@ -63,7 +64,7 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
       done: Some([]),
       new_task_input: "",
     ),
-    read_localstorage("todo"),
+    read_localstorage("kanban"),
   )
 }
 
@@ -73,13 +74,33 @@ pub opaque type Msg {
   UpdateNewTask(String)
   AddTask(String)
   DeleteTask(String, String)
-  CacheUpdatedMessage(Result(Array(String), Nil))
+  CacheUpdatedMessage(Result(Array(Array(String)), Nil))
 }
 
 fn update(model: Model, msg: Msg) {
   case msg {
-    CacheUpdatedMessage(Ok(to_do)) -> #(
-      Model(..model, to_do: Some(array.to_list(to_do))),
+    CacheUpdatedMessage(Ok(kanban)) -> #(
+      Model(
+        ..model,
+        to_do: Some(
+          kanban
+          |> array.get(0)
+          |> result.lazy_unwrap(fn() { array.from_list([]) })
+          |> array.to_list,
+        ),
+        in_progress: Some(
+          kanban
+          |> array.get(1)
+          |> result.lazy_unwrap(fn() { array.from_list([]) })
+          |> array.to_list,
+        ),
+        done: Some(
+          kanban
+          |> array.get(2)
+          |> result.lazy_unwrap(fn() { array.from_list([]) })
+          |> array.to_list,
+        ),
+      ),
       effect.none(),
     )
     CacheUpdatedMessage(Error(_)) -> #(model, effect.none())
@@ -94,9 +115,17 @@ fn update(model: Model, msg: Msg) {
             model.to_do
             |> option.lazy_unwrap(fn() { [] })
             |> list.filter(fn(t) { t != task })
+          let added_tasks =
+            [Some(tasks), model.in_progress, model.done]
+            |> list.map(fn(x) {
+              option.lazy_unwrap(x, fn() { [""] })
+              |> array.from_list
+            })
+            |> array.from_list
+
           #(
             Model(..model, to_do: Some(tasks)),
-            write_localstorage("todo", tasks |> array.from_list),
+            write_localstorage("kanban", added_tasks),
           )
         }
         "in_progress" -> {
@@ -104,9 +133,16 @@ fn update(model: Model, msg: Msg) {
             model.in_progress
             |> option.lazy_unwrap(fn() { [] })
             |> list.filter(fn(t) { t != task })
+          let added_tasks =
+            [model.to_do, Some(tasks), model.done]
+            |> list.map(fn(x) {
+              option.lazy_unwrap(x, fn() { [""] })
+              |> array.from_list
+            })
+            |> array.from_list
           #(
             Model(..model, in_progress: Some(tasks)),
-            write_localstorage("in_progress", tasks |> array.from_list),
+            write_localstorage("in_progress", added_tasks),
           )
         }
         "done" -> {
@@ -114,9 +150,17 @@ fn update(model: Model, msg: Msg) {
             model.done
             |> option.lazy_unwrap(fn() { [] })
             |> list.filter(fn(t) { t != task })
+
+          let added_tasks =
+            [model.to_do, model.in_progress, Some(tasks)]
+            |> list.map(fn(x) {
+              option.lazy_unwrap(x, fn() { [""] })
+              |> array.from_list
+            })
+            |> array.from_list
           #(
             Model(..model, done: Some(tasks)),
-            write_localstorage("done", tasks |> array.from_list),
+            write_localstorage("done", added_tasks),
           )
         }
 
@@ -142,13 +186,20 @@ fn update(model: Model, msg: Msg) {
                 new_task_input: "",
               ),
               write_localstorage(
-                "todo",
-                Some([
-                  t,
-                  ..model.to_do
-                  |> option.lazy_unwrap(fn() { [] })
-                ])
-                  |> option.lazy_unwrap(fn() { [] })
+                "kanban",
+                [
+                  Some([
+                    t,
+                    ..model.to_do
+                    |> option.lazy_unwrap(fn() { [] })
+                  ]),
+                  model.in_progress,
+                  model.done,
+                ]
+                  |> list.map(fn(x) {
+                    option.lazy_unwrap(x, fn() { [""] })
+                    |> array.from_list
+                  })
                   |> array.from_list,
               ),
             )
@@ -168,13 +219,20 @@ fn update(model: Model, msg: Msg) {
                 new_task_input: "",
               ),
               write_localstorage(
-                "in_progress",
-                Some([
-                  t,
-                  ..model.in_progress
-                  |> option.lazy_unwrap(fn() { [] })
-                ])
-                  |> option.lazy_unwrap(fn() { [] })
+                "kanban",
+                [
+                  model.to_do,
+                  Some([
+                    t,
+                    ..model.in_progress
+                    |> option.lazy_unwrap(fn() { [] })
+                  ]),
+                  model.done,
+                ]
+                  |> list.map(fn(x) {
+                    option.lazy_unwrap(x, fn() { [""] })
+                    |> array.from_list
+                  })
                   |> array.from_list,
               ),
             )
@@ -194,13 +252,20 @@ fn update(model: Model, msg: Msg) {
                 new_task_input: "",
               ),
               write_localstorage(
-                "done",
-                Some([
-                  t,
-                  ..model.done
-                  |> option.lazy_unwrap(fn() { [] })
-                ])
-                  |> option.lazy_unwrap(fn() { [] })
+                "kanban",
+                [
+                  model.to_do,
+                  model.in_progress,
+                  Some([
+                    t,
+                    ..model.done
+                    |> option.lazy_unwrap(fn() { [] })
+                  ]),
+                ]
+                  |> list.map(fn(x) {
+                    option.lazy_unwrap(x, fn() { [""] })
+                    |> array.from_list
+                  })
                   |> array.from_list,
               ),
             )
