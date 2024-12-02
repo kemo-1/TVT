@@ -39,11 +39,3 @@ jobs:
           name: github-pages
           path: dist 
 
-  deploy:
-    concurrency: ci-${{ github.ref }}
-    needs: [build] # The second job must depend on the first one to complete before running and uses ubuntu-latest instead of windows.
-    runs-on: ubuntu-latest
-    steps:
-        - name: Deploy to GitHub Pages
-          id: deployment
-          uses: actions/deploy-pages@v4 # or specific "vX.X.X" version tag for this action
