@@ -22,7 +22,13 @@ jobs:
         uses: bahmutov/npm-install@v1
         
       - name: install gleam
-        run: npm i @chouqueth/gleam 
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.1.2"
+          gleam-version: "1.6.1"
+          rebar3-version: "3"
+          # elixir-version: "1.15.4"
+      - run: gleam deps download 
         
       - name: Build project
         run: npm run build
