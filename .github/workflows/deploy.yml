@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    name: Build
+    name: build and deploy
     runs-on: ubuntu-latest
 
     steps:
@@ -26,13 +26,6 @@ jobs:
         
       - name: Build project
         run: npm run build
-
-  deploy:
-    name: Deploy
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
